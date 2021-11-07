@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -9,6 +11,32 @@ import 'package:flutter_phoenix/flutter_phoenix.dart';
 
 void main() {
   runApp(MyApp(),);
+}
+class roomsStream{
+  roomsStream(){
+    late final dref = FirebaseDatabase.instance.reference();
+    dref.once().then((DataSnapshot snapshot){
+      Map <dynamic, dynamic> values = snapshot.value;
+      values.forEach((key, values){
+        _controller.sink.add(key);
+      });
+    });
+  }
+  final _controller = StreamController<String>();
+  Stream<String> get stream =>_controller.stream ;
+}
+class scoreStream{
+  scoreStream(String room,String btntxt){
+    late final dref = FirebaseDatabase.instance.reference();
+    dref.child(room).child(btntxt+"Score").onValue.listen((event) {
+      var Score = event.snapshot.value;
+
+        _controller.sink.add(int.parse(Score));
+      });
+    }
+
+  final _controller = StreamController<int>();
+  Stream<int> get stream =>_controller.stream ;
 }
 class MyApp extends StatelessWidget {
   // This widget is the root of your application.
@@ -113,6 +141,7 @@ class _MyHomePageState extends State<MyHomePage> {
   int RoomCode;
   _MyHomePageState(this.RoomCode);
   late final dref = FirebaseDatabase.instance.reference();
+
   int _counter = 0;
   String nameval="bla";
   String TVtxt = "";
@@ -159,43 +188,60 @@ class _MyHomePageState extends State<MyHomePage> {
     //Navigator.pop(context);
 
   }
+
+  Future <int> getScore(String Btntxt)async {
+    var Score;
+     await dref.child(RoomCode.toString()).child(Btntxt+"Score").onValue.listen((event) {
+      Score = event.snapshot.value;
+    });
+    return Score;
+  }
+  String Win(String Btntxt){
+    String TVtextz = Btntxt+" wins";
+    var Score = int.parse(getScore(Btntxt).toString()) ;
+    dref.child(RoomCode.toString()).update({
+      "XTurn":true,
+      Btntxt+"Score": Score+1
+    });
+    return TVtextz;
+  }
   String CheckWin(){
     _counter++;
     String TVtextz = "";
     if(_counter>4){
       if (Btn1txt!=""&&Btn1txt==Btn2txt&& Btn2txt==Btn3txt){
-        TVtextz = Btn1txt+" wins";
+        TVtextz = Win(Btn1txt);
         EndGame();
       }
 
       else if (Btn7txt!=""&&Btn7txt==Btn8txt&& Btn8txt==Btn9txt){
-        TVtextz = Btn7txt+" wins";
+        TVtextz = Win(Btn7txt);
         EndGame();
       }
       else if (Btn1txt!=""&&Btn1txt==Btn4txt&& Btn4txt==Btn7txt){
-        TVtextz = Btn1txt+" wins";
+        TVtextz = Win(Btn1txt);
         EndGame();
       }
       else if (Btn3txt!=""&&Btn3txt==Btn6txt&& Btn6txt==Btn9txt){
-        TVtextz = Btn3txt+" wins";
+        TVtextz = Win(Btn3txt);
         EndGame();
       }
       else if (Btn4txt!=""&&Btn4txt==Btn5txt&& Btn5txt==Btn6txt){
-        TVtextz = Btn4txt+" wins";
+        TVtextz = Win(Btn4txt);
         EndGame();
       }
 
       else if (Btn2txt!=""&&Btn2txt==Btn5txt&& Btn5txt==Btn8txt){
-        TVtextz = Btn2txt+" wins";
+        TVtextz = Win(Btn2txt);
         EndGame();
       }
 
       else if (Btn1txt!=""&&Btn1txt==Btn5txt&& Btn5txt==Btn9txt){
-        TVtextz = Btn1txt+" wins";
+        TVtextz = Win(Btn1txt);
         EndGame();
       }
       else if (Btn3txt!=""&&Btn3txt==Btn5txt&& Btn5txt==Btn7txt){
-        TVtextz = Btn3txt+" wins";
+        TVtextz = Win(Btn3txt);
         EndGame();
       }
       else if (Btn1txt!=""&&Btn2txt!=""&&Btn3txt!=""&&Btn4txt!=""&&Btn5txt!=""&&Btn6txt!=""&&Btn7txt!=""&&Btn8txt!=""&&Btn9txt!=""){
@@ -259,9 +305,12 @@ class _MyHomePageState extends State<MyHomePage> {
       "7": "",
       "8": "",
       "9": "",
-      "XTurn":true
+      "XTurn":true,
+      "Joined":true
     }
     );
+
+
     dref.child(RoomCode.toString()).onChildChanged.forEach((event) {
 
       if(event.snapshot.key == 'XTurn'){setState(() {XTurn=event.snapshot.value;});}
@@ -331,6 +380,12 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+  @override
+  void deactivate() {
+
+    // TODO: implement deactivate
+    super.deactivate();
   }
 
   @override
@@ -700,6 +755,34 @@ class _MyCreateRoomLoadingPageState extends State<MyCreateRoomLoadingPage> {
   @override
   void initState() {
     super.initState();
+    dref.child(roomcode.toString()).set({
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": "",
+      "XTurn":true,
+      "Joined":false,
+      "XScore":0,
+      "OScore":0
+    }
+    );
+    dref.child(roomcode.toString()).onChildChanged.forEach((event) {
+      if(event.snapshot.key == 'Joined'&& event.snapshot.value ==true){
+        setState(() {
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder:(context)=>new MyHomePage(roomcode , 'home') )
+          );
+        });
+      }
+    });
+
   }
   @override
   Widget build(BuildContext context) {
@@ -746,11 +829,75 @@ class MyJoinRoomPage extends StatefulWidget {
   @override
   _MyJoinRoomPageState createState() => _MyJoinRoomPageState();
 }
+
 class _MyJoinRoomPageState extends State<MyJoinRoomPage> {
+
   late final dref = FirebaseDatabase.instance.reference();
   TextEditingController _controller = new TextEditingController();
   int RoomCode = 0;
-  void GoToRoom(){
+  List<String> rooms = <String>[];
+  @override
+  void initState() {
+    super.initState();
+  }
+// Future<int> getTotal(Stream<int> numbers)async{
+//     int total = 0;
+//
+//     await for(final value in numbers){
+//       total+= value;
+//     }
+//     return total;
+// }
+
+   void getRooms(Stream <String> keys)async{
+    List<String> roomslist = [];
+    await for(final String value in keys){
+      rooms.add(value);
+    }
+    //return roomslist;
+  }
+  bool RoomChecked(int roomcode)  {
+    // String testroomcode ="";
+    // dref.orderByKey().startAt(roomcode.toString()).once().then((DataSnapshot snapshot){
+    //   Map<dynamic, dynamic> values = snapshot.value;
+    //   values.forEach((key,values) {
+    //     testroomcode=key.toString();
+    //   });
+    // });
+    //String testroomcode = dref.orderByKey().startAt(roomcode.toString()).once().toString();
+    // if (roomcode.toString()==testroomcode){
+    //   return true;
+    // }
+    // else{
+    //   return false;
+    // }
+    //List<String> roomlist = List.from(getRooms(stream)) ;
+
+    final Stream<String> stream =  roomsStream().stream;
+    //Future <List<String>> roomslist =
+    getRooms(stream);
+    // setState(() {
+
+      // Future<void> getRooms() async { // making this both a Future and async method
+      //   dref.once().then((DataSnapshot snapshot){
+      //     Map <dynamic, dynamic> values = snapshot.value;
+      //
+      //      values.forEach((key, values){
+      //       rooms.add(key);
+      //     });
+      //   });
+      // }
+
+    //});
+
+     for(var i=0;i<rooms.length;i++){
+      if (rooms[i].toString()==roomcode.toString()){
+        return true;
+      }
+    }
+    return false;
+  }
+  void WrongRoom(){
     showAlertDialog(BuildContext context) {
 
       // set up the button
@@ -763,8 +910,8 @@ class _MyJoinRoomPageState extends State<MyJoinRoomPage> {
 
       // set up the AlertDialog
       AlertDialog alert = AlertDialog(
-        title: Text("My title"),
-        content: Text("This is my message."),
+        title: Text("This room does not exist"),
+        content: Text("Please try again"),
         actions: [
           okButton,
         ],
@@ -780,10 +927,7 @@ class _MyJoinRoomPageState extends State<MyJoinRoomPage> {
     }
     showAlertDialog(context);
   }
-  @override
-  void initState() {
-    super.initState();
-  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -827,12 +971,25 @@ class _MyJoinRoomPageState extends State<MyJoinRoomPage> {
               TextButton(
                   onPressed: (){
                     setState(() {
-                      _controller.text.isEmpty ? null : Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder:(context)=>new MyHomePage(int.tryParse(_controller.text) ?? 0, 'home') )
-                      );
+                      RoomCode=int.parse(_controller.text);
                     });
+
+                    if (RoomChecked(RoomCode)){
+                      setState(() {
+                        // _controller.text.isEmpty ? null :
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder:(context)=>new MyHomePage(int.tryParse(_controller.text) ?? 0, 'home') )
+                        );
+                      });
+                    }
+                    else {
+                      setState(() {
+                        WrongRoom();
+                      });
+                    }
+
 
                   },
                   child: Text("Play!")
